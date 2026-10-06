@@ -17,7 +17,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.engine import AuditEngine, COLLECTORS
-from app.utils.platform import is_admin, relaunch_as_admin, safe_output_root\nfrom app.gui.v2_remote_page import RemotePageModern
+from app.utils.platform import is_admin, relaunch_as_admin, safe_output_root
+from app.gui.v2_remote_page import RemotePageModern
 
 COLLECTOR_LABELS = {
     'system': 'Sistema', 'accounts': 'Cuentas', 'logons': 'Inicios de sesión',
