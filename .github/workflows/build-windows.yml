@@ -1,4 +1,4 @@
-name: Build Windows EXE V2
+name: Build Windows EXE V3
 
 on:
   push:
@@ -37,6 +37,8 @@ jobs:
           $project = Split-Path $req.FullName -Parent
           Copy-Item "overrides\app\gui\v2_main_window.py" (Join-Path $project "app\gui\v2_main_window.py") -Force
           Copy-Item "overrides\app\gui\v2_remote_page.py" (Join-Path $project "app\gui\v2_remote_page.py") -Force
+          Copy-Item "overrides\app\gui\v3_enhancements.py" (Join-Path $project "app\gui\v3_enhancements.py") -Force
+          Copy-Item "overrides\app\gui\v3_main_window.py" (Join-Path $project "app\gui\v3_main_window.py") -Force
           Copy-Item "overrides\main.py" (Join-Path $project "main.py") -Force
           "PROJECT_DIR=$project" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "V2 interface applied"
@@ -69,7 +71,7 @@ jobs:
           import os, json, tempfile
           from pathlib import Path
           from PySide6.QtWidgets import QApplication
-          from app.gui.v2_main_window import MainWindow
+          from app.gui.v3_main_window import MainWindow
           from app.engine import AuditEngine
           out,summary=AuditEngine(Path(tempfile.mkdtemp())).run(demo=True)
           data=json.loads((out/"reports"/"audit.json").read_text(encoding="utf-8"))
@@ -81,7 +83,7 @@ jobs:
           w.output_dir=out
           w.data=data
           w._populate_all()
-          assert len(w.pages)==14, len(w.pages)
+          assert len(w.pages)==14, len(w.pages); assert hasattr(w,'export_full_report'); assert hasattr(w,'v3_status')
           assert len(w.nav)==14, len(w.nav)
           shots=Path(os.environ["GITHUB_WORKSPACE"])/"screenshots"
           shots.mkdir(exist_ok=True)
@@ -97,7 +99,7 @@ jobs:
               pm=w.grab()
               ok=pm.save(str(shots/f"{key}.png"))
               assert ok
-          print("V2 GUI navigation and screenshots OK")
+          print("V3 GUI navigation and screenshots OK")
           w.close()
           '@ | Set-Content -Encoding UTF8 _gui_test.py
           python _gui_test.py
@@ -145,7 +147,7 @@ jobs:
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: WindowsForensicAuditor-V2-Windows-x64
+          name: WindowsForensicAuditor-V3-Windows-x64
           path: artifacts/*
           if-no-files-found: error
           retention-days: 30
@@ -153,7 +155,7 @@ jobs:
       - name: Upload UI screenshots
         uses: actions/upload-artifact@v4
         with:
-          name: WindowsForensicAuditor-V2-Screenshots
+          name: WindowsForensicAuditor-V3-Screenshots
           path: screenshots/*.png
           if-no-files-found: error
           retention-days: 30
