@@ -39,6 +39,7 @@ jobs:
           Copy-Item "overrides\app\gui\v2_remote_page.py" (Join-Path $project "app\gui\v2_remote_page.py") -Force
           Copy-Item "overrides\app\gui\v3_enhancements.py" (Join-Path $project "app\gui\v3_enhancements.py") -Force
           Copy-Item "overrides\app\gui\v3_main_window.py" (Join-Path $project "app\gui\v3_main_window.py") -Force
+          Copy-Item "overrides\app\gui\v3_report.py" (Join-Path $project "app\gui\v3_report.py") -Force
           Copy-Item "overrides\main.py" (Join-Path $project "main.py") -Force
           "PROJECT_DIR=$project" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "V2 interface applied"
@@ -119,6 +120,10 @@ jobs:
           assert (out/"reports"/"evidence_package.zip").exists()
           d=json.loads((out/"reports"/"audit.json").read_text(encoding="utf-8"))
           assert d.get("results")
+          from app.gui.v3_report import generate_professional_pdf, generate_professional_html
+          generate_professional_pdf(d,out,"Completa"); generate_professional_html(d,out,"Completa")
+          assert (out/"reports"/"reporte_forense_profesional.pdf").exists()
+          assert (out/"reports"/"reporte_forense_profesional.html").exists()
           print("Demo audit integration OK")
           '@ | Set-Content -Encoding UTF8 _demo_test.py
           python _demo_test.py
