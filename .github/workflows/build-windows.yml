@@ -36,6 +36,7 @@ jobs:
           if (-not $req) { throw "requirements.txt not found" }
           $project = Split-Path $req.FullName -Parent
           Copy-Item "overrides\app\gui\v2_main_window.py" (Join-Path $project "app\gui\v2_main_window.py") -Force
+          Copy-Item "overrides\app\gui\v2_remote_page.py" (Join-Path $project "app\gui\v2_remote_page.py") -Force
           Copy-Item "overrides\main.py" (Join-Path $project "main.py") -Force
           "PROJECT_DIR=$project" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "V2 interface applied"
