@@ -63,6 +63,20 @@ jobs:
           Set-Location $env:PROJECT_DIR
           python -m pytest -q
           python -m compileall -q app main.py
+          @'
+          from PySide6.QtCore import QTimer
+          from PySide6.QtWidgets import QApplication,QDialog
+          from app.gui.v3_enhancements import ProfileDialog
+          app=QApplication([])
+          dlg=ProfileDialog()
+          QTimer.singleShot(100, dlg.accept)
+          result=dlg.exec()
+          assert result == QDialog.DialogCode.Accepted, result
+          profile,demo=dlg.selection()
+          assert profile == "Completa"
+          print("Audit start dialog OK:", profile, demo)
+          '@ | Set-Content -Encoding UTF8 _audit_start_dialog_test.py
+          python _audit_start_dialog_test.py
 
       - name: Validate all V2 screens and create screenshots
         shell: powershell
