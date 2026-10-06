@@ -21,48 +21,78 @@ jobs:
           python-version: '3.12'
           architecture: 'x64'
 
-      - name: Rebuild source ZIP
+      - name: Rebuild and validate source
         shell: powershell
         run: |
           $b64 = Get-ChildItem buildsrc\chunk*.txt | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Raw }
           $joined = ($b64 -join "")
           [IO.File]::WriteAllBytes("WindowsForensicAuditor_source.zip", [Convert]::FromBase64String($joined))
-          Expand-Archive -Path WindowsForensicAuditor_source.zip -DestinationPath . -Force
+          $hash = (Get-FileHash "WindowsForensicAuditor_source.zip" -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne "1b8f3a4f68f58f8e226a461a2adb88982839fa83e7f072eb07d1c0491d0cea10") {
+            throw "Source ZIP checksum mismatch: $hash"
+          }
+          New-Item -ItemType Directory -Force -Path src | Out-Null
+          Expand-Archive -Path WindowsForensicAuditor_source.zip -DestinationPath src -Force
+          $req = Get-ChildItem -Path src -Filter requirements.txt -Recurse | Select-Object -First 1
+          if (-not $req) {
+            Get-ChildItem src -Recurse | Select-Object FullName
+            throw "requirements.txt not found"
+          }
+          $project = Split-Path $req.FullName -Parent
+          "PROJECT_DIR=$project" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "PROJECT_DIR=$project"
+          Get-ChildItem $project | Select-Object Name,Length,LastWriteTime
 
       - name: Install dependencies
         shell: powershell
-        working-directory: WindowsForensicAuditor
         run: |
+          Set-Location $env:PROJECT_DIR
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Validate imports
+        shell: powershell
+        run: |
+          Set-Location $env:PROJECT_DIR
+          python -c "import PySide6, psutil, win32evtlog, win32security, wmi, reportlab, jinja2; print('Windows imports OK')"
+
       - name: Run tests
         shell: powershell
-        working-directory: WindowsForensicAuditor
         run: |
+          Set-Location $env:PROJECT_DIR
           python -m pytest -q
           python -m compileall -q app main.py
 
       - name: Build executable
         shell: powershell
-        working-directory: WindowsForensicAuditor
         run: |
+          Set-Location $env:PROJECT_DIR
           python -m PyInstaller --clean --noconfirm WindowsForensicAuditor.spec
-          if (!(Test-Path "dist\WindowsForensicAuditor.exe")) { throw "EXE was not generated" }
+          if (!(Test-Path "dist\WindowsForensicAuditor.exe")) {
+            throw "EXE was not generated"
+          }
 
-      - name: Generate SHA256
+      - name: Verify executable and SHA256
         shell: powershell
-        working-directory: WindowsForensicAuditor
         run: |
-          (Get-FileHash "dist\WindowsForensicAuditor.exe" -Algorithm SHA256).Hash | Out-File "dist\WindowsForensicAuditor.exe.sha256.txt" -Encoding ascii
-          Get-Item "dist\WindowsForensicAuditor.exe" | Format-List Name,Length,LastWriteTime
+          Set-Location $env:PROJECT_DIR
+          $exe = Resolve-Path "dist\WindowsForensicAuditor.exe"
+          $bytes = [IO.File]::ReadAllBytes($exe)
+          if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+            throw "Generated file is not a valid PE/MZ executable"
+          }
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          $hash | Out-File "dist\WindowsForensicAuditor.exe.sha256.txt" -Encoding ascii
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\artifacts" | Out-Null
+          Copy-Item $exe "$env:GITHUB_WORKSPACE\artifacts\WindowsForensicAuditor.exe"
+          Copy-Item "dist\WindowsForensicAuditor.exe.sha256.txt" "$env:GITHUB_WORKSPACE\artifacts\WindowsForensicAuditor.exe.sha256.txt"
+          Write-Host "EXE SHA256: $hash"
+          Get-Item $exe | Format-List Name,Length,LastWriteTime
 
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
           name: WindowsForensicAuditor-Windows-x64
-          path: |
-            WindowsForensicAuditor/dist/WindowsForensicAuditor.exe
-            WindowsForensicAuditor/dist/WindowsForensicAuditor.exe.sha256.txt
+          path: artifacts/*
           if-no-files-found: error
           retention-days: 30
