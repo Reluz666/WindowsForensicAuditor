@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Windows EXE V2
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
           python-version: '3.12'
           architecture: 'x64'
 
-      - name: Rebuild base source and apply rebuilt Spanish UI
+      - name: Rebuild base source and apply V2 interface
         shell: powershell
         run: |
           $chunks = Get-ChildItem buildsrc2\chunk*.txt | Sort-Object Name
@@ -35,14 +35,10 @@ jobs:
           $req = Get-ChildItem -Path src -Filter requirements.txt -Recurse | Select-Object -First 1
           if (-not $req) { throw "requirements.txt not found" }
           $project = Split-Path $req.FullName -Parent
-          foreach ($item in @("main.py","WindowsForensicAuditor.spec","app","tests")) {
-            if (!(Test-Path (Join-Path $project $item))) { throw "Essential project item missing: $item" }
-          }
-          Copy-Item "overrides\app\gui\main_window.py" (Join-Path $project "app\gui\main_window.py") -Force
-          Copy-Item "overrides\app\gui\enhancements.py" (Join-Path $project "app\gui\enhancements.py") -Force
+          Copy-Item "overrides\app\gui\v2_main_window.py" (Join-Path $project "app\gui\v2_main_window.py") -Force
           Copy-Item "overrides\main.py" (Join-Path $project "main.py") -Force
           "PROJECT_DIR=$project" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Write-Host "Rebuilt Spanish UI applied"
+          Write-Host "V2 interface applied"
 
       - name: Install dependencies
         shell: powershell
@@ -57,20 +53,64 @@ jobs:
           Set-Location $env:PROJECT_DIR
           python -c "import PySide6, psutil, win32evtlog, win32security, wmi, reportlab, jinja2; print('Windows imports OK')"
 
-      - name: Run tests and enhanced GUI smoke test
+      - name: Run unit tests
         shell: powershell
         run: |
           Set-Location $env:PROJECT_DIR
           python -m pytest -q
           python -m compileall -q app main.py
-          $env:QT_QPA_PLATFORM="offscreen"
-          python -c "from PySide6.QtWidgets import QApplication; from main import MainWindow; a=QApplication([]); w=MainWindow(); assert w.pages.count() >= 15, w.pages.count(); assert len(w.nav) >= 15; [b.click() for b,p in w.nav if b.text() != 'Nueva auditoría']; print('Enhanced GUI OK:', w.windowTitle(), 'pages=', w.pages.count(), 'nav=', len(w.nav)); w.close()"
 
-      - name: Run demo audit integration test
+      - name: Validate all V2 screens and create screenshots
         shell: powershell
         run: |
           Set-Location $env:PROJECT_DIR
-          python -c "from pathlib import Path; import tempfile; from app.engine import AuditEngine; o,s=AuditEngine(Path(tempfile.mkdtemp())).run(demo=True); assert (o/'reports'/'audit.json').exists(); assert (o/'reports'/'report.pdf').exists(); assert (o/'reports'/'evidence_package.zip').exists(); print('Demo audit OK:', o)"
+          $env:QT_QPA_PLATFORM="offscreen"
+          @'
+          import os
+          from pathlib import Path
+          from PySide6.QtWidgets import QApplication
+          from app.gui.v2_main_window import MainWindow
+          app=QApplication([])
+          w=MainWindow()
+          assert len(w.pages)==14, len(w.pages)
+          assert len(w.nav)==14, len(w.nav)
+          shots=Path(os.environ["GITHUB_WORKSPACE"])/"screenshots"
+          shots.mkdir(exist_ok=True)
+          for key,button in w.nav:
+              w.show_page(key)
+              app.processEvents()
+              assert w.stack.currentWidget() is w.pages[key]
+          for key in ("dashboard","remote","security","findings","evidence","reports"):
+              w.show_page(key)
+              w.resize(1580,930)
+              w.show()
+              app.processEvents()
+              pm=w.grab()
+              ok=pm.save(str(shots/f"{key}.png"))
+              assert ok
+          print("V2 GUI navigation and screenshots OK")
+          w.close()
+          '@ | Set-Content -Encoding UTF8 _gui_test.py
+          python _gui_test.py
+
+      - name: Run demo audit integration
+        shell: powershell
+        run: |
+          Set-Location $env:PROJECT_DIR
+          @'
+          import json, tempfile
+          from pathlib import Path
+          from app.engine import AuditEngine
+          out,s=AuditEngine(Path(tempfile.mkdtemp())).run(demo=True)
+          assert (out/"reports"/"audit.json").exists()
+          assert (out/"reports"/"report.pdf").exists()
+          assert (out/"reports"/"report.html").exists()
+          assert (out/"reports"/"evidence_package.zip").exists()
+          d=json.loads((out/"reports"/"audit.json").read_text(encoding="utf-8"))
+          assert d.get("results")
+          print("Demo audit integration OK")
+          '@ | Set-Content -Encoding UTF8 _demo_test.py
+          python _demo_test.py
 
       - name: Build executable
         shell: powershell
@@ -92,12 +132,19 @@ jobs:
           Copy-Item $exe "$env:GITHUB_WORKSPACE\artifacts\WindowsForensicAuditor.exe"
           Copy-Item "dist\WindowsForensicAuditor.exe.sha256.txt" "$env:GITHUB_WORKSPACE\artifacts\WindowsForensicAuditor.exe.sha256.txt"
           Write-Host "EXE SHA256: $hash"
-          Get-Item $exe | Format-List Name,Length,LastWriteTime
 
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: WindowsForensicAuditor-Espanol-Reconstruido-x64
+          name: WindowsForensicAuditor-V2-Windows-x64
           path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload UI screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindowsForensicAuditor-V2-Screenshots
+          path: screenshots/*.png
           if-no-files-found: error
           retention-days: 30
