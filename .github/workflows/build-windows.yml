@@ -21,7 +21,7 @@ jobs:
           python-version: '3.12'
           architecture: 'x64'
 
-      - name: Rebuild exact source
+      - name: Rebuild base source and apply Spanish UI
         shell: powershell
         run: |
           $chunks = Get-ChildItem buildsrc2\chunk*.txt | Sort-Object Name
@@ -29,10 +29,7 @@ jobs:
           $joined = (($chunks | ForEach-Object { Get-Content $_.FullName -Raw }) -join "")
           [IO.File]::WriteAllBytes("WindowsForensicAuditor_source.zip", [Convert]::FromBase64String($joined))
           $hash = (Get-FileHash "WindowsForensicAuditor_source.zip" -Algorithm SHA256).Hash.ToLower()
-          Write-Host "Source SHA256: $hash"
-          if ($hash -ne "1b8f3a4f68f58f8e226a461a2adb88982839fa83e7f072eb07d1c0491d0cea10") {
-            throw "Source integrity check failed"
-          }
+          if ($hash -ne "1b8f3a4f68f58f8e226a461a2adb88982839fa83e7f072eb07d1c0491d0cea10") { throw "Base source integrity check failed" }
           New-Item -ItemType Directory -Force -Path src | Out-Null
           Expand-Archive -Path WindowsForensicAuditor_source.zip -DestinationPath src -Force
           $req = Get-ChildItem -Path src -Filter requirements.txt -Recurse | Select-Object -First 1
@@ -41,8 +38,9 @@ jobs:
           foreach ($item in @("main.py","WindowsForensicAuditor.spec","app","tests")) {
             if (!(Test-Path (Join-Path $project $item))) { throw "Essential project item missing: $item" }
           }
+          Copy-Item "overrides\app\gui\main_window.py" (Join-Path $project "app\gui\main_window.py") -Force
           "PROJECT_DIR=$project" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Write-Host "PROJECT_DIR=$project"
+          Write-Host "Spanish UI override applied"
 
       - name: Install dependencies
         shell: powershell
@@ -57,12 +55,14 @@ jobs:
           Set-Location $env:PROJECT_DIR
           python -c "import PySide6, psutil, win32evtlog, win32security, wmi, reportlab, jinja2; print('Windows imports OK')"
 
-      - name: Run tests
+      - name: Run tests and GUI smoke test
         shell: powershell
         run: |
           Set-Location $env:PROJECT_DIR
           python -m pytest -q
           python -m compileall -q app main.py
+          $env:QT_QPA_PLATFORM="offscreen"
+          python -c "from PySide6.QtWidgets import QApplication; from app.gui.main_window import MainWindow; a=QApplication([]); w=MainWindow(); print(w.windowTitle(), w.pages.count()); w.close()"
 
       - name: Build executable
         shell: powershell
@@ -89,7 +89,7 @@ jobs:
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: WindowsForensicAuditor-Windows-x64
+          name: WindowsForensicAuditor-Espanol-Windows-x64
           path: artifacts/*
           if-no-files-found: error
           retention-days: 30
