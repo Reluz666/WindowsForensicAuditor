@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.engine import AuditEngine, COLLECTORS
-from app.utils.platform import is_admin, relaunch_as_admin, safe_output_root
+from app.utils.platform import is_admin, relaunch_as_admin, safe_output_root\nfrom app.gui.v2_remote_page import RemotePageModern
 
 COLLECTOR_LABELS = {
     'system': 'Sistema', 'accounts': 'Cuentas', 'logons': 'Inicios de sesión',
@@ -703,7 +703,7 @@ class MainWindow(QMainWindow):
         self.pages['dashboard']=DashboardPage(self)
         self.pages['system']=ModulePage(self,'Resumen del sistema',['system','software','windows_update','recent_files'])
         self.pages['accounts']=ModulePage(self,'Cuentas de usuario',['accounts'])
-        self.pages['remote']=RemotePage(self)
+        self.pages['remote']=RemotePageModern(self)
         self.pages['processes']=ModulePage(self,'Actividad de procesos',['processes','powershell'])
         self.pages['network']=ModulePage(self,'Actividad de red',['network','firewall'])
         self.pages['persistence']=ModulePage(self,'Persistencia y autoarranque',['persistence','services','tasks'])
