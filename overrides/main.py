@@ -1,9 +1,6 @@
 import sys
 from PySide6.QtWidgets import QApplication
-from app.gui.main_window import MainWindow as BaseMainWindow
-from app.gui.enhancements import build_enhanced_class
-
-MainWindow = build_enhanced_class(BaseMainWindow)
+from app.gui.v2_main_window import MainWindow
 
 def main():
     app = QApplication(sys.argv)
