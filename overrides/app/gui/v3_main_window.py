@@ -2,7 +2,7 @@ from __future__ import annotations
 import json, os
 from pathlib import Path
 from PySide6.QtCore import QThread,Signal
-from PySide6.QtWidgets import QMessageBox,QFileDialog
+from PySide6.QtWidgets import QMessageBox,QFileDialog,QDialog
 from app.engine import AuditEngine,COLLECTORS
 from app.utils.platform import safe_output_root
 from app.gui.v2_main_window import MainWindow as V2MainWindow
@@ -24,10 +24,19 @@ class MainWindow(V2MainWindow):
         super().__init__(); apply_v3(self); self.current_profile='Completa'
 
     def start_audit(self):
+        try:
+            return self._start_audit_impl()
+        except Exception as exc:
+            self.v3_status.setText('Estado: ERROR')
+            QMessageBox.critical(self,'No se pudo iniciar la auditoría',f'{type(exc).__name__}: {exc}')
+
+    def _start_audit_impl(self):
         if self.worker and self.worker.isRunning():
             QMessageBox.information(self,'Auditoría en curso','Ya existe una auditoría en ejecución.'); return
         dlg=ProfileDialog(self)
-        if dlg.exec()!=dlg.Accepted:return
+        result=dlg.exec()
+        if result != QDialog.DialogCode.Accepted:
+            return
         profile,demo=dlg.selection(); self.current_profile=profile
         selected=PROFILE_MAP.get(profile)
         if selected is None: selected={c.name for c in COLLECTORS}
