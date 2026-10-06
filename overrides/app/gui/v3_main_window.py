@@ -7,6 +7,7 @@ from app.engine import AuditEngine,COLLECTORS
 from app.utils.platform import safe_output_root
 from app.gui.v2_main_window import MainWindow as V2MainWindow
 from app.gui.v3_enhancements import apply_v3,ProfileDialog,PROFILE_MAP,correlate,make_full_package
+from app.gui.v3_report import generate_professional_pdf, generate_professional_html
 
 class ProfileWorker(QThread):
     progress=Signal(str,int,int); done=Signal(str,dict); failed=Signal(str)
@@ -55,6 +56,11 @@ class MainWindow(V2MainWindow):
         for f in extra:
             if (str(f.get('title')),str(f.get('module'))) not in seen: existing.append(f)
         self.data['findings']=existing
+        try:
+            generate_professional_pdf(self.data,self.output_dir,self.current_profile)
+            generate_professional_html(self.data,self.output_dir,self.current_profile)
+        except Exception:
+            pass
         self._populate_all(); self.show_page('dashboard'); self.v3_status.setText(f'Estado: COMPLETADA — {self.current_profile.upper()}')
         QMessageBox.information(self,'Auditoría finalizada','La auditoría terminó correctamente.\n\nLos resultados están disponibles en pantalla. Puede usar “Exportar reporte completo” para obtener un único paquete con todos los reportes y evidencias.')
 
