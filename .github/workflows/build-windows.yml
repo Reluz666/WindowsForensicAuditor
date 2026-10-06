@@ -21,29 +21,28 @@ jobs:
           python-version: '3.12'
           architecture: 'x64'
 
-      - name: Rebuild and validate source
+      - name: Rebuild exact source
         shell: powershell
         run: |
-          $b64 = Get-ChildItem buildsrc\chunk*.txt | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Raw }
-          $joined = ($b64 -join "")
+          $chunks = Get-ChildItem buildsrc2\chunk*.txt | Sort-Object Name
+          if ($chunks.Count -ne 12) { throw "Expected 12 exact source chunks, found $($chunks.Count)" }
+          $joined = (($chunks | ForEach-Object { Get-Content $_.FullName -Raw }) -join "")
           [IO.File]::WriteAllBytes("WindowsForensicAuditor_source.zip", [Convert]::FromBase64String($joined))
           $hash = (Get-FileHash "WindowsForensicAuditor_source.zip" -Algorithm SHA256).Hash.ToLower()
-          Write-Host "Reconstructed source SHA256: $hash"
+          Write-Host "Source SHA256: $hash"
+          if ($hash -ne "1b8f3a4f68f58f8e226a461a2adb88982839fa83e7f072eb07d1c0491d0cea10") {
+            throw "Source integrity check failed"
+          }
           New-Item -ItemType Directory -Force -Path src | Out-Null
           Expand-Archive -Path WindowsForensicAuditor_source.zip -DestinationPath src -Force
           $req = Get-ChildItem -Path src -Filter requirements.txt -Recurse | Select-Object -First 1
-          if (-not $req) {
-            Get-ChildItem src -Recurse | Select-Object FullName
-            throw "requirements.txt not found"
-          }
+          if (-not $req) { throw "requirements.txt not found" }
           $project = Split-Path $req.FullName -Parent
-          $required = @("main.py","WindowsForensicAuditor.spec","app")
-          foreach ($item in $required) {
+          foreach ($item in @("main.py","WindowsForensicAuditor.spec","app","tests")) {
             if (!(Test-Path (Join-Path $project $item))) { throw "Essential project item missing: $item" }
           }
           "PROJECT_DIR=$project" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "PROJECT_DIR=$project"
-          Get-ChildItem $project | Select-Object Name,Length,LastWriteTime
 
       - name: Install dependencies
         shell: powershell
@@ -70,9 +69,7 @@ jobs:
         run: |
           Set-Location $env:PROJECT_DIR
           python -m PyInstaller --clean --noconfirm WindowsForensicAuditor.spec
-          if (!(Test-Path "dist\WindowsForensicAuditor.exe")) {
-            throw "EXE was not generated"
-          }
+          if (!(Test-Path "dist\WindowsForensicAuditor.exe")) { throw "EXE was not generated" }
 
       - name: Verify executable and SHA256
         shell: powershell
@@ -80,9 +77,7 @@ jobs:
           Set-Location $env:PROJECT_DIR
           $exe = Resolve-Path "dist\WindowsForensicAuditor.exe"
           $bytes = [IO.File]::ReadAllBytes($exe)
-          if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
-            throw "Generated file is not a valid PE/MZ executable"
-          }
+          if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "Generated file is not PE/MZ" }
           $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
           $hash | Out-File "dist\WindowsForensicAuditor.exe.sha256.txt" -Encoding ascii
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\artifacts" | Out-Null
